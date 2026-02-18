@@ -169,14 +169,108 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
 
         return response
 
-    def login(self, username=None, *, password=None, provider=None):
+    def login(self, username=None, password=None, provider=None):
         # Docstring is maintained separately
         endpoint, data = self._prepare_login(username=username, password=password, provider=provider)
-        response = self.send_request(
-            method=("POST", endpoint), data=data, timeout=self._timeout_login, auto_refresh_session=False
-        )
-        response = self._process_login_response(response=response)
+
+        # Check if this is an OIDC provider (device code flow)
+        if "authorize" in endpoint:
+            response = self._oidc_device_code_login(endpoint=endpoint)
+        else:
+            # Standard password-based login
+            response = self.send_request(
+                method=("POST", endpoint), data=data, timeout=self._timeout_login, auto_refresh_session=False
+            )
+            response = self._process_login_response(response=response)
+
         return response
+
+    def _oidc_device_code_login(self, endpoint):
+        """
+        Perform OIDC login using the device code flow.
+        Opens a browser for user authentication and polls for completion.
+        """
+        import webbrowser
+        import time
+
+        # Step 1: Initiate device code flow
+        device_response = self.send_request(
+            method=("POST", endpoint), timeout=self._timeout_login, auto_refresh_session=False
+        )
+
+        # Extract device code flow parameters
+        authorization_uri = device_response.get("authorization_uri") or device_response.get("verification_uri")
+        user_code = device_response.get("user_code")
+        device_code = device_response.get("device_code")
+        interval = device_response.get("interval", 5)
+        expires_in = device_response.get("expires_in", 300)
+
+        if not all([authorization_uri, device_code]):
+            raise self.RequestParameterError(
+                "OIDC device code flow response missing required fields (authorization_uri, device_code)"
+            )
+
+        # Step 2: Open browser for user authentication
+        print(f"Opening browser for authentication: {authorization_uri}")
+        if user_code:
+            print(f"Enter this code when prompted: {user_code}")
+
+        # Open browser while suppressing GTK/browser stderr messages
+        import subprocess
+        try:
+            subprocess.Popen(
+                ["xdg-open", authorization_uri],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+        except FileNotFoundError:
+            # Fallback to webbrowser if xdg-open is not available
+            webbrowser.open(authorization_uri)
+
+        # Step 3: Poll for token
+        token_endpoint = endpoint.replace("/authorize", "/token")
+        start_time = time.time()
+
+        while (time.time() - start_time) < expires_in:
+            time.sleep(interval)
+
+            try:
+                token_response = self.send_request(
+                    method=("POST", token_endpoint),
+                    params={"device_code": device_code},
+                    timeout=self._timeout_login,
+                    auto_refresh_session=False,
+                )
+
+                # Check if we received tokens
+                if token_response.get("access_token"):
+                    response = self._process_login_response(response=token_response)
+                    return response
+
+                # Check for pending authorization
+                error = token_response.get("error")
+                if error == "authorization_pending":
+                    continue
+                elif error == "slow_down":
+                    interval += 5  # Increase polling interval
+                    continue
+                elif error:
+                    raise self.RequestFailedError(
+                        request={"method": "OIDC device code login"},
+                        response={"msg": f"OIDC authentication failed: {error}"}
+                    )
+
+            except self.HTTPClientError as ex:
+                # Some servers return 400 for authorization_pending
+                if "authorization_pending" in str(ex).lower():
+                    continue
+                raise
+
+        raise self.RequestTimeoutError(
+            "OIDC authentication timed out waiting for user authorization",
+            request={"method": "OIDC device code login", "endpoint": endpoint}
+        )
 
     def session_refresh(self, *, refresh_token=None):
         # Docstring is maintained separately
