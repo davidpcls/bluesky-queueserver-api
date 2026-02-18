@@ -1,6 +1,7 @@
 import httpx
 from bluesky_queueserver import ZMQCommSendThreads
 import webbrowser
+import time
 
 from .api_docstrings import (
     _doc_api_api_scopes,
@@ -174,16 +175,12 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
         # Docstring is maintained separately
         endpoint, data = self._prepare_login(username=username, password=password, provider=provider)
 
-        if self._is_oidc_provider(endpoint):
+        if self._is_external_auth(endpoint):
             response = self._oidc_device_code_login(endpoint=endpoint)
         else:
             response = self._password_login(endpoint=endpoint, data=data)
 
         return response
-
-    def _is_oidc_provider(self, endpoint):
-        """Check if the endpoint is an OIDC provider."""
-        return "authorize" in endpoint
 
     def _password_login(self, endpoint, data):
         """Perform standard password-based login."""
@@ -199,7 +196,7 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
         """
         device_params = self._initiate_device_code_flow(endpoint)
 
-        self._prompt_user_for_auth(device_params)
+        self._oidc_prompt_user_for_auth(device_params)
         webbrowser.open(device_params["authorization_uri"])
 
         token_endpoint = endpoint.replace("/authorize", "/token")
@@ -215,32 +212,10 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
         device_response = self.send_request(
             method=("POST", endpoint), timeout=self._timeout_login, auto_refresh_session=False
         )
-
-        authorization_uri = device_response.get("authorization_uri") or device_response.get("verification_uri")
-        device_code = device_response.get("device_code")
-
-        if not all([authorization_uri, device_code]):
-            raise self.RequestParameterError(
-                "OIDC device code flow response missing required fields (authorization_uri, device_code)"
-            )
-
-        return {
-            "authorization_uri": authorization_uri,
-            "user_code": device_response.get("user_code"),
-            "device_code": device_code,
-            "interval": device_response.get("interval", 5),
-            "expires_in": device_response.get("expires_in", 300),
-        }
-
-    def _prompt_user_for_auth(self, device_params):
-        """Display authentication instructions to the user."""
-        print(f"Opening browser for authentication: {device_params['authorization_uri']}")
-        if device_params["user_code"]:
-            print(f"Enter this code when prompted: {device_params['user_code']}")
+        return self._oicd_handle_initial_response(device_response)
 
     def _poll_for_token(self, token_endpoint, device_code, interval, expires_in):
         """Poll the token endpoint until authentication completes or times out."""
-        import time
 
         start_time = time.time()
 
@@ -275,31 +250,12 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
             if token_response.get("access_token"):
                 return self._process_login_response(response=token_response), None
 
-            return self._handle_token_polling_response(token_response)
+            return self._oidc_handle_token_polling_response(token_response)
 
         except self.HTTPClientError as ex:
             if "authorization_pending" in str(ex).lower():
                 return None, None
             raise
-
-    def _handle_token_polling_response(self, token_response):
-        """
-        Handle non-success token polling responses.
-        Returns (None, new_interval) to continue polling, or raises on error.
-        """
-        error = token_response.get("error")
-
-        if error == "authorization_pending":
-            return None, None
-        elif error == "slow_down":
-            return None, 5  # Signal to increase interval by 5 seconds
-        elif error:
-            raise self.RequestFailedError(
-                request={"method": "OIDC device code login"},
-                response={"msg": f"OIDC authentication failed: {error}"},
-            )
-
-        return None, None
 
     def session_refresh(self, *, refresh_token=None):
         # Docstring is maintained separately
