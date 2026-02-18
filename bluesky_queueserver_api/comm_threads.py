@@ -169,7 +169,7 @@ class ReManagerComm_HTTP_Threads(ReManagerAPI_HTTP_Base):
 
         return response
 
-    def login(self, username=None, password=None, provider=None):
+    def login(self, username=None, *, password=None, provider=None):
         # Docstring is maintained separately
         endpoint, data = self._prepare_login(username=username, password=password, provider=provider)
 
