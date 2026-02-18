@@ -1,5 +1,6 @@
 import httpx
 from bluesky_queueserver import ZMQCommSendAsync
+import webbrowser
 
 from .api_docstrings import (
     _doc_api_api_scopes,
@@ -175,93 +176,133 @@ class ReManagerComm_HTTP_Async(ReManagerAPI_HTTP_Base):
         # Docstring is maintained separately
         endpoint, data = self._prepare_login(username=username, password=password, provider=provider)
 
-        # Check if this is an OIDC provider (device code flow)
-        if "authorize" in endpoint:
+        if self._is_oidc_provider(endpoint):
             response = await self._oidc_device_code_login(endpoint=endpoint)
         else:
-            # Standard password-based login
-            response = await self.send_request(
-                method=("POST", endpoint), data=data, timeout=self._timeout_login, auto_refresh_session=False
-            )
-            response = self._process_login_response(response=response)
+            response = await self._password_login(endpoint=endpoint, data=data)
 
         return response
+
+    def _is_oidc_provider(self, endpoint):
+        """Check if the endpoint is an OIDC provider."""
+        return "authorize" in endpoint
+
+    async def _password_login(self, endpoint, data):
+        """Perform standard password-based login."""
+        response = await self.send_request(
+            method=("POST", endpoint), data=data, timeout=self._timeout_login, auto_refresh_session=False
+        )
+        return self._process_login_response(response=response)
 
     async def _oidc_device_code_login(self, endpoint):
         """
         Perform OIDC login using the device code flow.
         Opens a browser for user authentication and polls for completion.
         """
-        import webbrowser
-        import asyncio
+        device_params = await self._initiate_device_code_flow(endpoint)
 
-        # Step 1: Initiate device code flow
+        self._prompt_user_for_auth(device_params)
+        webbrowser.open(device_params["authorization_uri"])
+
+        token_endpoint = endpoint.replace("/authorize", "/token")
+        return await self._poll_for_token(
+            token_endpoint=token_endpoint,
+            device_code=device_params["device_code"],
+            interval=device_params["interval"],
+            expires_in=device_params["expires_in"],
+        )
+
+    async def _initiate_device_code_flow(self, endpoint):
+        """Initiate OIDC device code flow and return device parameters."""
         device_response = await self.send_request(
             method=("POST", endpoint), timeout=self._timeout_login, auto_refresh_session=False
         )
 
-        # Extract device code flow parameters
         authorization_uri = device_response.get("authorization_uri") or device_response.get("verification_uri")
-        user_code = device_response.get("user_code")
         device_code = device_response.get("device_code")
-        interval = device_response.get("interval", 5)
-        expires_in = device_response.get("expires_in", 300)
 
         if not all([authorization_uri, device_code]):
             raise self.RequestParameterError(
                 "OIDC device code flow response missing required fields (authorization_uri, device_code)"
             )
 
-        # Step 2: Open browser for user authentication
-        print(f"Opening browser for authentication: {authorization_uri}")
-        if user_code:
-            print(f"Enter this code when prompted: {user_code}")
-        webbrowser.open(authorization_uri)
+        return {
+            "authorization_uri": authorization_uri,
+            "user_code": device_response.get("user_code"),
+            "device_code": device_code,
+            "interval": device_response.get("interval", 5),
+            "expires_in": device_response.get("expires_in", 300),
+        }
 
-        # Step 3: Poll for token
-        token_endpoint = endpoint.replace("/authorize", "/token")
+    def _prompt_user_for_auth(self, device_params):
+        """Display authentication instructions to the user."""
+        print(f"Opening browser for authentication: {device_params['authorization_uri']}")
+        if device_params["user_code"]:
+            print(f"Enter this code when prompted: {device_params['user_code']}")
+
+    async def _poll_for_token(self, token_endpoint, device_code, interval, expires_in):
+        """Poll the token endpoint until authentication completes or times out."""
+        import asyncio
+
         elapsed = 0
 
         while elapsed < expires_in:
             await asyncio.sleep(interval)
             elapsed += interval
 
-            try:
-                token_response = await self.send_request(
-                    method=("POST", token_endpoint),
-                    params={"device_code": device_code},
-                    timeout=self._timeout_login,
-                    auto_refresh_session=False,
-                )
-
-                # Check if we received tokens
-                if token_response.get("access_token"):
-                    response = self._process_login_response(response=token_response)
-                    return response
-
-                # Check for pending authorization
-                error = token_response.get("error")
-                if error == "authorization_pending":
-                    continue
-                elif error == "slow_down":
-                    interval += 5  # Increase polling interval
-                    continue
-                elif error:
-                    raise self.RequestFailedError(
-                        request={"method": "OIDC device code login"},
-                        response={"msg": f"OIDC authentication failed: {error}"}
-                    )
-
-            except self.HTTPClientError as ex:
-                # Some servers return 400 for authorization_pending
-                if "authorization_pending" in str(ex).lower():
-                    continue
-                raise
+            result, new_interval = await self._attempt_token_request(token_endpoint, device_code)
+            if result is not None:
+                return result
+            if new_interval is not None:
+                interval = new_interval
 
         raise self.RequestTimeoutError(
             "OIDC authentication timed out waiting for user authorization",
-            request={"method": "OIDC device code login", "endpoint": endpoint}
+            request={"method": "OIDC device code login", "endpoint": token_endpoint},
         )
+
+    async def _attempt_token_request(self, token_endpoint, device_code):
+        """
+        Attempt a single token request.
+        Returns (response, None) on success, (None, new_interval) to continue polling,
+        or raises an exception on error.
+        """
+        try:
+            token_response = await self.send_request(
+                method=("POST", token_endpoint),
+                params={"device_code": device_code},
+                timeout=self._timeout_login,
+                auto_refresh_session=False,
+            )
+
+            if token_response.get("access_token"):
+                return self._process_login_response(response=token_response), None
+
+            return self._handle_token_polling_response(token_response)
+
+        except self.HTTPClientError as ex:
+            if "authorization_pending" in str(ex).lower():
+                return None, None
+            raise
+
+    def _handle_token_polling_response(self, token_response):
+        """
+        Handle non-success token polling responses.
+        Returns (None, new_interval) to continue polling, or raises on error.
+        """
+        error = token_response.get("error")
+
+        if error == "authorization_pending":
+            return None, None
+        elif error == "slow_down":
+            return None, 5  # Signal to increase interval by 5 seconds
+        elif error:
+            raise self.RequestFailedError(
+                request={"method": "OIDC device code login"},
+                response={"msg": f"OIDC authentication failed: {error}"},
+            )
+
+        return None, None
 
     async def session_refresh(self, *, refresh_token=None):
         # Docstring is maintained separately
