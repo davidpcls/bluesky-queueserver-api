@@ -508,31 +508,31 @@ class ReManagerAPI_HTTP_Base(ReManagerAPI_Base):
             self._auth_key = None
 
     def _prepare_login(self, *, username, password, provider):
-        # Interactively ask for username and password if they were not passed as parameters
-        if username is None:
-            username = input("Username: ")
-        if password is None:
-            password = getpass.getpass()
-
-        if not isinstance(username, str):
-            raise self.RequestParameterError(f"'username' is not string: type(username)={type(username)}")
-        username = username.strip()
-        if not username:
-            raise self.RequestParameterError("'username' is an empty string")
-        if not isinstance(password, str):
-            raise self.RequestParameterError(f"'password' is not string: type(password)={type(password)}")
-        password = password.strip()
-        if not password:
-            raise self.RequestParameterError("'password' is an empty string")
-
         provider = self._preprocess_endpoint_name(provider, msg="Authentication provider path")
-
         selected_provider = provider or self._http_auth_provider
         if not selected_provider:
             raise self.RequestParameterError(
                 "Authentication provider is not specified: set default authentication provider "
                 "or pass the provider endpoint as a parameter"
             )
+        if not "authorize" in selected_provider:
+
+            # Interactively ask for username and password if they were not passed as parameters
+            if username is None:
+                username = input("Username: ")
+            if password is None:
+                password = getpass.getpass()
+
+            if not isinstance(username, str):
+                raise self.RequestParameterError(f"'username' is not string: type(username)={type(username)}")
+            username = username.strip()
+            if not username:
+                raise self.RequestParameterError("'username' is an empty string")
+            if not isinstance(password, str):
+                raise self.RequestParameterError(f"'password' is not string: type(password)={type(password)}")
+            password = password.strip()
+            if not password:
+                raise self.RequestParameterError("'password' is an empty string")
 
         data = {"username": username, "password": password}
 
