@@ -69,10 +69,14 @@ def test_ReManagerComm_ZMQ_Threads_03(monkeypatch, re_manager_cmd, zmq_encoding)
     """
     params = {"item": _plan1, "user": _user, "user_group": _user_group}
 
+    public_key, private_key = generate_zmq_keys()
+
+    set_qserver_zmq_public_key(monkeypatch, server_public_key=public_key)
     set_qserver_zmq_encoding(monkeypatch, encoding=zmq_encoding)
+    monkeypatch.setenv("QSERVER_ZMQ_PRIVATE_KEY", private_key)
     re_manager_cmd([f"--zmq-encoding={zmq_encoding}"])
 
-    RM = ReManagerComm_ZMQ_Threads(zmq_encoding=zmq_encoding)
+    RM = ReManagerComm_ZMQ_Threads(zmq_encoding=zmq_encoding, zmq_public_key=public_key)
     result = RM.send_request(method="queue_item_add", params=params)
     assert result["success"] is True
     RM.close()
