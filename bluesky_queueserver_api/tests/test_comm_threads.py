@@ -201,4 +201,3 @@ def test_ReManagerComm_HTTP_Threads_requests(re_manager, fastapi_server):  # noq
     assert result["success"] is False
     assert "request contains no item info" in result["msg"]
     RM.close()
-

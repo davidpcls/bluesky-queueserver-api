@@ -44,4 +44,3 @@ def test_ReManagerAPI_Base_02(request_fail_exceptions, response, success, msg):
             assert ex.request == request
         else:
             assert False, "Exception was not raised"
-

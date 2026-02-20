@@ -1,7 +1,8 @@
+import asyncio
+import webbrowser
+
 import httpx
 from bluesky_queueserver import ZMQCommSendAsync
-import webbrowser
-import asyncio
 
 from .api_docstrings import (
     _doc_api_api_scopes,
@@ -259,8 +260,6 @@ class ReManagerComm_HTTP_Async(ReManagerAPI_HTTP_Base):
             if "authorization_pending" in str(ex).lower():
                 return None, None
             raise
-
-
 
     async def session_refresh(self, *, refresh_token=None):
         # Docstring is maintained separately

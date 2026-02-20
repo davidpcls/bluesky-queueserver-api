@@ -229,4 +229,3 @@ def test_ReManagerComm_HTTP_Async_requests(re_manager, fastapi_server):  # noqa:
         await RM.close()
 
     asyncio.run(testing())
-

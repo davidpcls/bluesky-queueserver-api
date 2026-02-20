@@ -10,9 +10,9 @@ Tests have been split into:
 You can run individual test files or this file to run all communication tests.
 """
 
+from .test_comm_async import *  # noqa: F401, F403
+
 # Import all tests from separate modules for backwards compatibility
 from .test_comm_base import *  # noqa: F401, F403
-from .test_comm_threads import *  # noqa: F401, F403
-from .test_comm_async import *  # noqa: F401, F403
 from .test_comm_oidc import *  # noqa: F401, F403
-
+from .test_comm_threads import *  # noqa: F401, F403
