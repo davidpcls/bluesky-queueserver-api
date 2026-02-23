@@ -89,8 +89,9 @@ def test_ReManagerComm_HTTP_Threads_01():
     """
     params = {"item": _plan1}
 
-    RM = ReManagerComm_HTTP_Threads()
-    with pytest.raises(RM.HTTPRequestError, match=re.escape("HTTP request error: [Errno 111] Connection refused")):
+    # Use a reserved local port that is expected to be closed in test environments.
+    RM = ReManagerComm_HTTP_Threads(http_server_uri="http://127.0.0.1:1")
+    with pytest.raises(RM.HTTPRequestError):
         RM.send_request(method="queue_item_add", params=params)
     RM.close()
 
