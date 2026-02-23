@@ -30,7 +30,7 @@ def test_ReManagerComm_ZMQ_Threads_01():
     """
     params = {"item": _plan1, "user": _user, "user_group": _user_group}
 
-    RM = ReManagerComm_ZMQ_Threads()
+    RM = ReManagerComm_ZMQ_Threads(timeout_recv=0.2)
     with pytest.raises(RM.RequestTimeoutError, match="timeout occurred"):
         RM.send_request(method="queue_item_add", params=params)
     RM.close()
@@ -89,35 +89,34 @@ def test_ReManagerComm_HTTP_Threads_01():
     """
     params = {"item": _plan1}
 
-    # Use a reserved local port that is expected to be closed in test environments.
     RM = ReManagerComm_HTTP_Threads(http_server_uri="http://127.0.0.1:1")
     with pytest.raises(RM.HTTPRequestError):
         RM.send_request(method="queue_item_add", params=params)
     RM.close()
 
 
-# fmt: off
-@pytest.mark.parametrize("server_uri, success", [
-    (None, True),
-    (default_http_server_uri, True),
-    ("http://localhost:60660", False),
-])
-# fmt: on
-def test_ReManagerComm_HTTP_Threads_02(re_manager, fastapi_server, server_uri, success):  # noqa: F811
+def test_ReManagerComm_HTTP_Threads_02(re_manager, fastapi_server):  # noqa: F811
     """
     ReManagerComm_HTTP_Threads: Test if parameter for setting HTTP server URI works as expected
     """
     params = {"item": _plan1}
 
-    RM = ReManagerComm_HTTP_Threads(http_server_uri=server_uri)
-    RM.set_authorization_key(api_key=API_KEY_FOR_TESTS)
-    if success:
-        result = RM.send_request(method="queue_item_add", params=params)
-        assert result["success"] is True
-    else:
-        with pytest.raises(RM.HTTPRequestError):
-            RM.send_request(method="queue_item_add", params=params)
-    RM.close()
+    test_cases = [
+        (None, True),
+        (default_http_server_uri, True),
+        ("http://localhost:60660", False),
+    ]
+
+    for server_uri, success in test_cases:
+        RM = ReManagerComm_HTTP_Threads(http_server_uri=server_uri)
+        RM.set_authorization_key(api_key=API_KEY_FOR_TESTS)
+        if success:
+            result = RM.send_request(method="queue_item_add", params=params)
+            assert result["success"] is True
+        else:
+            with pytest.raises(RM.HTTPRequestError):
+                RM.send_request(method="queue_item_add", params=params)
+        RM.close()
 
 
 def test_ReManagerComm_HTTP_Threads_03():
