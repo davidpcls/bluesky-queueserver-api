@@ -1,7 +1,6 @@
 import enum
 import getpass
 import os
-from abc import abstractmethod
 from collections.abc import Iterable, Mapping
 
 import httpx
@@ -354,7 +353,7 @@ class ReManagerAPI_HTTP_Base(ReManagerAPI_Base):
         ``token`` or ``api_key`` passed as parameters override the default security keys set in the class.
         """
         if (token is not None) and (api_key is not None):
-            raise self._RequestParameterError("The request contains both token and API key.")
+            raise self.RequestParameterError("The request contains both token and API key.")
 
         auth_method = self.AuthorizationMethods.NONE
         key_in_params = False
@@ -562,7 +561,7 @@ class ReManagerAPI_HTTP_Base(ReManagerAPI_Base):
         """Display authentication instructions to the user."""
         print(f"Opening browser for authentication: {device_params['authorization_uri']}")
         if device_params["user_code"]:
-            print(f"Enter this code when prompted: {device_params['user_code']}")
+            print(f"Enter this code when prompted: {device_params['user_code']}  (Do not enter the dash)")
 
     def _oicd_handle_initial_response(self, device_response):
         authorization_uri = device_response.get("authorization_uri") or device_response.get("verification_uri")
