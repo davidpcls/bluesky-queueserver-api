@@ -9,6 +9,11 @@ PYTHON_VERSIONS="latest"
 PYTEST_EXTRA_ARGS=""
 ARTIFACTS_DIR="$ROOT_DIR/.docker-test-artifacts"
 
+SUMMARY_TSV=""
+SUMMARY_FAIL_LOGS=""
+SUMMARY_TXT=""
+SUMMARY_JSON=""
+
 SUPPORTED_PYTHON_VERSIONS=("3.10" "3.11" "3.12" "3.13")
 
 usage() {
@@ -141,10 +146,150 @@ echo "==> Preparing artifacts directory: $ARTIFACTS_DIR"
 rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 
+SUMMARY_TSV="$ARTIFACTS_DIR/.summary_rows.tsv"
+SUMMARY_FAIL_LOGS="$ARTIFACTS_DIR/.summary_fail_logs.txt"
+SUMMARY_TXT="$ARTIFACTS_DIR/summary.txt"
+SUMMARY_JSON="$ARTIFACTS_DIR/summary.json"
+
+: > "$SUMMARY_TSV"
+: > "$SUMMARY_FAIL_LOGS"
+
 TESTS_START_EPOCH="$(date +%s)"
 TESTS_START_HUMAN="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo "==> Test run start time (UTC): $TESTS_START_HUMAN"
 echo "==> Python versions selected: ${SELECTED_PYTHON_VERSIONS[*]}"
+
+collect_junit_totals() {
+    local artifacts_dir="$1"
+
+    python - "$artifacts_dir" <<'PY'
+import glob
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+artifacts_dir = sys.argv[1]
+tests = failures = errors = files = 0
+
+for path in sorted(glob.glob(os.path.join(artifacts_dir, "junit.*.xml"))):
+    files += 1
+    try:
+        root = ET.parse(path).getroot()
+    except Exception:
+        continue
+
+    if root.tag == "testsuite":
+        suites = [root]
+    elif root.tag == "testsuites":
+        suites = root.findall("testsuite")
+    else:
+        suites = []
+
+    for suite in suites:
+        tests += int(suite.attrib.get("tests", 0) or 0)
+        failures += int(suite.attrib.get("failures", 0) or 0)
+        errors += int(suite.attrib.get("errors", 0) or 0)
+
+print(f"{tests} {failures} {errors} {files}")
+PY
+}
+
+append_summary_row() {
+    local py_version="$1"
+    local chunks_total="$2"
+    local junit_files="$3"
+    local tests="$4"
+    local failures="$5"
+    local errors="$6"
+    local status="$7"
+
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+        "$py_version" "$chunks_total" "$junit_files" "$tests" "$failures" "$errors" "$status" >> "$SUMMARY_TSV"
+}
+
+write_summary_files() {
+    local end_epoch end_human elapsed_sec
+
+    end_epoch="$(date +%s)"
+    end_human="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    elapsed_sec=$(( end_epoch - TESTS_START_EPOCH ))
+
+    {
+        echo "Test Run Summary"
+        echo "Start (UTC): $TESTS_START_HUMAN"
+        echo "End (UTC):   $end_human"
+        echo "Elapsed:     ${elapsed_sec}s"
+        echo
+        printf "%-8s %-8s %-7s %-8s %-10s %-8s %-6s\n" \
+            "Python" "Status" "Chunks" "JUnit" "Tests" "Failures" "Errors"
+        printf "%-8s %-8s %-7s %-8s %-10s %-8s %-6s\n" \
+            "------" "------" "------" "-----" "-----" "--------" "------"
+
+        if [[ -s "$SUMMARY_TSV" ]]; then
+            while IFS=$'\t' read -r py_version chunks_total junit_files tests failures errors status; do
+                printf "%-8s %-8s %-7s %-8s %-10s %-8s %-6s\n" \
+                    "$py_version" "$status" "$chunks_total" "$junit_files" "$tests" "$failures" "$errors"
+            done < "$SUMMARY_TSV"
+        else
+            echo "No per-version summary rows were recorded."
+        fi
+
+        if [[ -s "$SUMMARY_FAIL_LOGS" ]]; then
+            echo
+            echo "Failed Chunk Logs"
+            cat "$SUMMARY_FAIL_LOGS"
+        fi
+    } > "$SUMMARY_TXT"
+
+    python - "$SUMMARY_TSV" "$SUMMARY_FAIL_LOGS" "$SUMMARY_JSON" "$TESTS_START_HUMAN" "$end_human" "$elapsed_sec" <<'PY'
+import json
+import sys
+
+summary_tsv, fail_logs_path, output_path, start_utc, end_utc, elapsed_sec = sys.argv[1:]
+
+rows = []
+with open(summary_tsv) as f:
+    for line in f:
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) != 7:
+            continue
+        py_version, chunks_total, junit_files, tests, failures, errors, status = parts
+        rows.append(
+            {
+                "python_version": py_version,
+                "status": status,
+                "chunks_total": int(chunks_total),
+                "junit_files": int(junit_files),
+                "tests": int(tests),
+                "failures": int(failures),
+                "errors": int(errors),
+            }
+        )
+
+failed_logs = []
+with open(fail_logs_path) as f:
+    failed_logs = [line.strip() for line in f if line.strip()]
+
+payload = {
+    "start_utc": start_utc,
+    "end_utc": end_utc,
+    "elapsed_seconds": int(elapsed_sec),
+    "python_versions": rows,
+    "failed_chunk_logs": failed_logs,
+}
+
+with open(output_path, "w") as f:
+    json.dump(payload, f, indent=2)
+    f.write("\n")
+PY
+
+    echo "==> Test run end time (UTC): $end_human"
+    echo "==> Test run elapsed: ${elapsed_sec}s"
+    echo "==> Summary written: $SUMMARY_TXT"
+    echo "==> Summary JSON:    $SUMMARY_JSON"
+}
+
+trap write_summary_files EXIT
 
 run_chunk() {
     local group="$1"
@@ -184,11 +329,17 @@ for PYTHON_VERSION in "${SELECTED_PYTHON_VERSIONS[@]}"; do
     echo "==> [Python $PYTHON_VERSION] Starting dynamic dispatch: $WORKER_COUNT workers over $CHUNK_COUNT chunks"
     if ! seq 1 "$CHUNK_COUNT" | xargs -P "$WORKER_COUNT" -I {} bash -lc 'run_chunk "$1"' _ {}; then
         echo "One or more chunks failed for Python $PYTHON_VERSION." >&2
+        read -r TOTAL_TESTS TOTAL_FAILURES TOTAL_ERRORS TOTAL_JUNIT_FILES < <(collect_junit_totals "$CURRENT_ARTIFACTS_DIR")
+
         for group in $(seq 1 "$CHUNK_COUNT"); do
             if [[ -f "$CURRENT_ARTIFACTS_DIR/.status.${group}.fail" ]]; then
                 echo "Chunk $group failed. Log: $CURRENT_ARTIFACTS_DIR/shard.${group}.log" >&2
+                echo "$CURRENT_ARTIFACTS_DIR/shard.${group}.log" >> "$SUMMARY_FAIL_LOGS"
             fi
         done
+
+        append_summary_row "py${PYTHON_VERSION}" "$CHUNK_COUNT" "$TOTAL_JUNIT_FILES" \
+            "$TOTAL_TESTS" "$TOTAL_FAILURES" "$TOTAL_ERRORS" "FAIL"
         exit 1
     fi
 
@@ -216,52 +367,23 @@ for PYTHON_VERSION in "${SELECTED_PYTHON_VERSIONS[@]}"; do
         cp "$CURRENT_ARTIFACTS_DIR/coverage.xml" "$ROOT_DIR/coverage.py${PYTHON_VERSION}.xml"
     fi
 
-    if compgen -G "$CURRENT_ARTIFACTS_DIR/junit.*.xml" > /dev/null; then
-        read -r TOTAL_TESTS TOTAL_FAILURES TOTAL_ERRORS < <(
-            python - "$CURRENT_ARTIFACTS_DIR" <<'PY'
-import glob
-import os
-import sys
-import xml.etree.ElementTree as ET
+    read -r TOTAL_TESTS TOTAL_FAILURES TOTAL_ERRORS TOTAL_JUNIT_FILES < <(collect_junit_totals "$CURRENT_ARTIFACTS_DIR")
+    echo "==> [Python $PYTHON_VERSION] JUnit summary: tests=$TOTAL_TESTS failures=$TOTAL_FAILURES errors=$TOTAL_ERRORS files=$TOTAL_JUNIT_FILES"
 
-artifacts_dir = sys.argv[1]
-tests = failures = errors = 0
-
-for path in sorted(glob.glob(os.path.join(artifacts_dir, "junit.*.xml"))):
-    try:
-        root = ET.parse(path).getroot()
-    except Exception:
-        continue
-
-    if root.tag == "testsuite":
-        suites = [root]
-    elif root.tag == "testsuites":
-        suites = root.findall("testsuite")
-    else:
-        suites = []
-
-    for suite in suites:
-        tests += int(suite.attrib.get("tests", 0) or 0)
-        failures += int(suite.attrib.get("failures", 0) or 0)
-        errors += int(suite.attrib.get("errors", 0) or 0)
-
-print(f"{tests} {failures} {errors}")
-PY
-        )
-        echo "==> [Python $PYTHON_VERSION] JUnit summary: tests=$TOTAL_TESTS failures=$TOTAL_FAILURES errors=$TOTAL_ERRORS"
+    VERSION_STATUS="PASS"
+    if [[ "$TOTAL_FAILURES" -gt 0 || "$TOTAL_ERRORS" -gt 0 ]]; then
+        VERSION_STATUS="FAIL"
     fi
-done
 
-TESTS_END_EPOCH="$(date +%s)"
-TESTS_END_HUMAN="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-TESTS_ELAPSED_SEC=$(( TESTS_END_EPOCH - TESTS_START_EPOCH ))
-echo "==> Test run end time (UTC): $TESTS_END_HUMAN"
-echo "==> Test run elapsed: ${TESTS_ELAPSED_SEC}s"
+    append_summary_row "py${PYTHON_VERSION}" "$CHUNK_COUNT" "$TOTAL_JUNIT_FILES" \
+        "$TOTAL_TESTS" "$TOTAL_FAILURES" "$TOTAL_ERRORS" "$VERSION_STATUS"
+done
 
 echo "==> Completed. Artifacts:"
 echo "    versioned logs      : $ARTIFACTS_DIR/py<VERSION>/shard.<N>.log"
 echo "    versioned junit     : $ARTIFACTS_DIR/py<VERSION>/junit.<N>.xml"
 echo "    versioned coverage  : $ARTIFACTS_DIR/py<VERSION>/{coverage.txt,coverage.xml}"
+echo "    run summary         : $ARTIFACTS_DIR/{summary.txt,summary.json}"
 
 if [[ "${#SELECTED_PYTHON_VERSIONS[@]}" -eq 1 ]]; then
     echo "    root coverage xml   : $ROOT_DIR/coverage.xml"
