@@ -105,7 +105,8 @@ fi
 
 if [[ "$RUN_BUILD" -eq 1 ]]; then
     echo "==> Build distributions"
-    $PYTHON_BIN setup.py sdist bdist_wheel
+    "${PIP_CMD[@]}" install --upgrade build
+    "$PYTHON_BIN" -m build
 else
     echo "==> Skipping package build"
 fi

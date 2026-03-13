@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 COPY requirements.txt requirements-dev.txt ./
-COPY pyproject.toml setup.py setup.cfg MANIFEST.in versioneer.py README.rst AUTHORS.rst LICENSE ./
+COPY pyproject.toml MANIFEST.in README.rst AUTHORS.rst LICENSE ./
 COPY bluesky_queueserver_api ./bluesky_queueserver_api
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
