@@ -23,6 +23,7 @@ from .common import (  # noqa: F401
     ip_kernel_simple_client,
     re_manager,
     re_manager_cmd,
+    re_manager_factory,
 )
 
 _user, _user_group = "Test User", default_user_group
@@ -3218,6 +3219,55 @@ def test_re_pause_01(re_manager, fastapi_server, protocol, library, pause_option
             await RM.wait_for_idle()
             check_status(await RM.status(), 0 if continue_option in ("resume", "stop") else 1, 1, "idle")
 
+            await RM.close()
+
+        asyncio.run(testing())
+
+
+# fmt: off
+@pytest.mark.parametrize("library", ["THREADS", "ASYNC"])
+@pytest.mark.parametrize("protocol", ["ZMQ", "HTTP"])
+# fmt: on
+def test_re_metadata_01(re_manager, fastapi_server, protocol, library):  # noqa: F811
+    """
+    ``re_metadata``: basic test
+    """
+    rm_api_class = _select_re_manager_api(protocol, library)
+
+    def check_resp(resp):
+        assert resp["success"] is True
+        assert resp["msg"] == ""
+        return resp
+
+    if not _is_async(library):
+        RM = instantiate_re_api_class(rm_api_class)
+
+        check_resp(RM.environment_open())
+        RM.wait_for_idle()
+
+        resp = check_resp(RM.re_metadata())
+        assert "re_metadata" in resp
+        assert "versions" in resp["re_metadata"]
+        assert resp["re_metadata"]["metadata_key"] == "metadata_value"
+
+        check_resp(RM.environment_close())
+        RM.wait_for_idle()
+        RM.close()
+    else:
+
+        async def testing():
+            RM = instantiate_re_api_class(rm_api_class)
+
+            check_resp(await RM.environment_open())
+            await RM.wait_for_idle()
+
+            resp = check_resp(await RM.re_metadata())
+            assert "re_metadata" in resp
+            assert "versions" in resp["re_metadata"]
+            assert resp["re_metadata"]["metadata_key"] == "metadata_value"
+
+            check_resp(await RM.environment_close())
+            await RM.wait_for_idle()
             await RM.close()
 
         asyncio.run(testing())
