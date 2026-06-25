@@ -209,4 +209,3 @@ def test_is_external_auth_parametrized(endpoint, expected):
     RM = ReManagerComm_HTTP_Threads()
     assert RM._is_external_auth(endpoint) is expected
     RM.close()
-

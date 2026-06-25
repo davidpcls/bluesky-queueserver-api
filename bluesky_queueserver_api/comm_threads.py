@@ -1,7 +1,8 @@
+import time
+import webbrowser
+
 import httpx
 from bluesky_queueserver import ZMQCommSendThreads
-import webbrowser
-import time
 
 from .api_docstrings import (
     _doc_api_api_scopes,
