@@ -29,12 +29,7 @@ from .common import (  # noqa: F401
 _user, _user_group = "Test User", default_user_group
 
 _plan1 = {"name": "count", "args": [["det1", "det2"]], "item_type": "plan"}
-_plan3 = {
-    "name": "count",
-    "args": [["det1", "det2"]],
-    "kwargs": {"num": 5, "delay": 1},
-    "item_type": "plan",
-}
+_plan3 = {"name": "count", "args": [["det1", "det2"]], "kwargs": {"num": 5, "delay": 1}, "item_type": "plan"}
 
 
 # fmt: off

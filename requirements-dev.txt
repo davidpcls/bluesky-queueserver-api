@@ -15,6 +15,12 @@ pre-commit
 black
 isort
 nbstripout
+# Required for Unit tests against bluesky-httpserver
+respx
+cryptography
+pytest-asyncio
+cachetools
+
 # These are dependencies of various sphinx extensions for documentation.
 ipython
 matplotlib
