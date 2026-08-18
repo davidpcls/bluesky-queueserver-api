@@ -797,7 +797,7 @@ class API_Base:
 
     def _validate_lock_key(self, lock_key):
         # lock key may be a non-empty string or None
-        if not (lock_key is None):
+        if lock_key is not None:
             if not isinstance(lock_key, str) or not lock_key:
                 raise ValueError(f"Parameter 'lock_key' must be non-empty string or None: lock_key={lock_key!r}")
 
@@ -904,7 +904,7 @@ class API_Base:
             lock_key = secrets.token_urlsafe(16)
             self.set_default_lock_key(lock_key)
         else:
-            with open(self._default_lock_key_path, "rt") as f:
+            with open(self._default_lock_key_path) as f:
                 lock_key = f.readlines()[0].strip()
         return lock_key
 
@@ -934,13 +934,13 @@ class API_Base:
             lock_key_path, _ = os.path.split(self._default_lock_key_path)
             if os.path.exists(lock_key_path):
                 if not os.path.isdir(lock_key_path):
-                    raise IOError(f"Path {lock_key_path!r} exists, but it is not a directory")
+                    raise OSError(f"Path {lock_key_path!r} exists, but it is not a directory")
             else:
                 os.makedirs(lock_key_path, exist_ok=True)
-            with open(self._default_lock_key_path, "wt") as f:
+            with open(self._default_lock_key_path, "w") as f:
                 f.write(lock_key)
         except Exception as ex:
-            raise IOError(f"Failed to save the default lock key: {ex}") from ex
+            raise OSError(f"Failed to save the default lock key: {ex}") from ex
 
     @property
     def lock_key(self):

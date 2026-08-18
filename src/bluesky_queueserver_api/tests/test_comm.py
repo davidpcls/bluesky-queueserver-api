@@ -9,9 +9,9 @@ from bluesky_queueserver_api.comm_async import ReManagerComm_HTTP_Async, ReManag
 from bluesky_queueserver_api.comm_base import ReManagerAPI_Base
 from bluesky_queueserver_api.comm_threads import ReManagerComm_HTTP_Threads, ReManagerComm_ZMQ_Threads
 
-from .common import fastapi_server  # noqa: F401
 from .common import (  # noqa: F401
     API_KEY_FOR_TESTS,
+    fastapi_server,  # noqa: F401
     re_manager,
     re_manager_cmd,
     re_manager_factory,

@@ -387,7 +387,7 @@ class ReManagerAPI_HTTP_Base(ReManagerAPI_Base):
             request_method, endpoint = rest_api_method_map[method]
         elif isinstance(method, Iterable):
             mtd = tuple(method)
-            if len(mtd) != 2 or any([not isinstance(_, str) for _ in mtd]):
+            if len(mtd) != 2 or any(not isinstance(_, str) for _ in mtd):
                 raise self.RequestParameterError(
                     f"If method is an iterable, it must consist of 2 string elements: method={mtd!r}"
                 )
@@ -584,7 +584,7 @@ class ReManagerAPI_HTTP_Base(ReManagerAPI_Base):
             raise self.RequestParameterError(f"Parameter 'expires_in' is not integer: expires_in={expires_in!r}")
         if isinstance(scopes, str) or not isinstance(scopes, (Iterable, type(None))):
             raise self.RequestParameterError(f"Parameter 'scopes' must be a list of strings: scopes={scopes!r}")
-        if isinstance(scopes, Iterable) and not all([isinstance(_, str) for _ in scopes]):
+        if isinstance(scopes, Iterable) and not all(isinstance(_, str) for _ in scopes):
             raise self.RequestParameterError(f"Parameter 'scopes' must be a list of strings: scopes={scopes!r}")
         if not isinstance(note, (str, type(None))):
             raise self.RequestParameterError(f"Parameter 'note' must be a strings: note={note!r}")

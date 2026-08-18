@@ -4,10 +4,10 @@ import time as ttime
 
 import pytest
 
-from .common import fastapi_server_fs  # noqa: F401
 from .common import (  # noqa: F401
     _is_async,
     _select_re_manager_api,
+    fastapi_server_fs,  # noqa: F401
     re_manager,
     re_manager_cmd,
     re_manager_factory,
