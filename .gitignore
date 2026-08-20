@@ -57,7 +57,7 @@ coverage.xml
 docs/build/
 docs/source/generated/
 
-**/_version.py
+# **/_version.py
 
 # pytest
 .pytest_cache/
