@@ -8,10 +8,10 @@ import pytest
 from bluesky_queueserver import generate_zmq_keys
 
 from ..comm_base import RequestParameterError
-from .common import fastapi_server_fs  # noqa: F401
 from .common import (  # noqa: F401
     _is_async,
     _select_re_manager_api,
+    fastapi_server_fs,  # noqa: F401
     instantiate_re_api_class,
     re_manager_cmd,
     re_manager_factory,

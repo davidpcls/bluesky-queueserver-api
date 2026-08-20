@@ -57,6 +57,8 @@ coverage.xml
 docs/build/
 docs/source/generated/
 
+**/_version.py
+
 # pytest
 .pytest_cache/
 
@@ -80,3 +82,8 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+pixi.lock

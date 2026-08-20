@@ -125,7 +125,7 @@ def test_BItem_05():
 
     # Verify that 'to_dict' returns a copy
     b1_dict_copy = b1.to_dict()
-    b1_dict_copy["args"] == [["det1"]]
+    b1_dict_copy["args"] = [["det1"]]
     assert b1.to_dict() == b1_dict
 
     # Verify that 'args', 'kwargs' and 'meta' return references
