@@ -3609,13 +3609,3 @@ _doc_api_logout = """
     HTTPRequestError, HTTPClientError, HTTPServerError
         Error while sending and processing HTTP request.
 """
-
-
-_doc_api_session_revoke
-_doc_api_apikey_new
-_doc_api_apikey_info
-_doc_api_apikey_delete
-_doc_api_whoami
-_doc_api_principal_info
-_doc_api_api_scopes
-_doc_api_logout

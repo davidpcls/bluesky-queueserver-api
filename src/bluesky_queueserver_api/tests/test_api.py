@@ -1890,7 +1890,7 @@ def test_history_get_clear_02(
         check_resp(RM.environment_open())
         RM.wait_for_idle()
 
-        for i in range(4):
+        for _ in range(4):
             check_resp(RM.item_add(item))
         check_status(RM.status(), 4, 0)
         check_resp(RM.queue_start())
@@ -1924,7 +1924,7 @@ def test_history_get_clear_02(
             check_resp(await RM.environment_open())
             await RM.wait_for_idle()
 
-            for i in range(4):
+            for _ in range(4):
                 check_resp(await RM.item_add(item))
             check_status(await RM.status(), 4, 0)
             check_resp(await RM.queue_start())

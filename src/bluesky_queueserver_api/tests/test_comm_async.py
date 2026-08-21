@@ -9,9 +9,9 @@ from bluesky_queueserver import generate_zmq_keys
 from bluesky_queueserver_api._defaults import default_http_server_uri, default_user_group
 from bluesky_queueserver_api.comm_async import ReManagerComm_HTTP_Async, ReManagerComm_ZMQ_Async
 
-from .common import fastapi_server  # noqa: F401
 from .common import (  # noqa: F401
     API_KEY_FOR_TESTS,
+    fastapi_server,
     re_manager,
     re_manager_cmd,
     set_qserver_zmq_address,
@@ -56,7 +56,7 @@ def test_ReManagerComm_ZMQ_Async_02(monkeypatch, re_manager_cmd):  # noqa: F811
     set_qserver_zmq_address(monkeypatch, zmq_server_address=zmq_server_addr)
     # Configure and start RE Manager
     monkeypatch.setenv("QSERVER_ZMQ_PRIVATE_KEY", private_key)
-    re_manager_cmd(["--zmq-addr", zmq_manager_addr])
+    re_manager_cmd(["--zmq-control-addr", zmq_manager_addr])
 
     async def testing():
         RM = ReManagerComm_ZMQ_Async(zmq_control_addr=zmq_server_addr, zmq_public_key=public_key)
