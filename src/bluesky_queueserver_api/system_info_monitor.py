@@ -40,7 +40,7 @@ _doc_SystemInfoMonitor_HTTP = """
     ----------
     parent: class
         Reference to the parent class (or any class). The class must expose the attribute
-        ``_client`` that references configured ``httpx`` client.
+        ``_client`` that references configured ``httpx2`` client.
     poll_period: float
         Period between consecutive retries to connect to the websocket at the server.
         The value is also used as a timeout for websocket receive operation. It may take
@@ -362,7 +362,7 @@ class SystemInfoMonitor_HTTP_Threads(_SystemInfoMonitor_Threads):
 
     def __init__(self, *, parent, poll_period, max_msgs):
         # The parent class is must have ``_client`` attribute with
-        #   active httpx client.
+        #   active httpx2 client.
         self._parent = parent  # Reference to the parent class
         self._monitor_poll_period = poll_period
         super().__init__(max_msgs=max_msgs)
@@ -538,7 +538,7 @@ class SystemInfoMonitor_HTTP_Async(_SystemInfoMonitor_Async):
 
     def __init__(self, *, parent, poll_period, max_msgs):
         # The parent class is must have ``_client`` attribute with
-        #   active httpx client.
+        #   active httpx2 client.
         self._parent = parent  # Reference to the parent class
         self._monitor_poll_period = poll_period
         super().__init__(max_msgs=max_msgs)

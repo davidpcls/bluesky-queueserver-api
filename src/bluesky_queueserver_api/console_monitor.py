@@ -43,7 +43,7 @@ _doc_ConsoleMonitor_HTTP = """
     ----------
     parent: class
         Reference to the parent class (or any class). The class must expose the attribute
-        ``_client`` that references configured ``httpx`` client.
+        ``_client`` that references configured ``httpx2`` client.
     poll_period: float
         Period between consecutive requests to HTTP server.
     max_msgs: int
@@ -603,7 +603,7 @@ class ConsoleMonitor_HTTP_Threads(_ConsoleMonitor_Threads):
 
     def __init__(self, *, parent, poll_period, max_msgs, max_lines):
         # The parent class is must have ``_client`` attribute with
-        #   active httpx client.
+        #   active httpx2 client.
         self._parent = parent  # Reference to the parent class
         self._monitor_poll_period = poll_period
         self._console_output_last_msg_uid = ""
@@ -762,7 +762,7 @@ class ConsoleMonitor_HTTP_Async(_ConsoleMonitor_Async):
 
     def __init__(self, *, parent, poll_period, max_msgs, max_lines):
         # The parent class is must have ``_client`` attribute with
-        #   active httpx client.
+        #   active httpx2 client.
         self._parent = parent  # Reference to the parent class
         self._monitor_poll_period = poll_period
         self._console_output_last_msg_uid = ""
