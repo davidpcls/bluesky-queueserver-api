@@ -478,7 +478,7 @@ class _SystemInfoMonitor_Async(_SystemInfoMonitor):
                 return await asyncio.wait_for(self._msg_queue.get(), timeout=timeout)
             else:
                 return self._msg_queue.get_nowait()
-        except (asyncio.QueueEmpty, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.QueueEmpty):
             raise RequestTimeoutError(f"No message was received (timeout={timeout})", request={})
 
 
@@ -609,7 +609,7 @@ class SystemInfoMonitor_HTTP_Async(_SystemInfoMonitor_Async):
                             except asyncio.QueueFull:
                                 # Queue is full, ignore the new messages
                                 pass
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             pass
             except Exception:
                 # Ignore communication errors. More detailed processing may be added later.

@@ -691,7 +691,7 @@ class _ConsoleMonitor_Async(_ConsoleMonitor):
                 return await asyncio.wait_for(self._msg_queue.get(), timeout=timeout)
             else:
                 return self._msg_queue.get_nowait()
-        except (asyncio.QueueEmpty, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.QueueEmpty):
             raise RequestTimeoutError(f"No message was received (timeout={timeout})", request={})
 
     async def text(self, nlines=None):
