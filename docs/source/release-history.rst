@@ -2,6 +2,13 @@
 Release History
 ===============
 
+Unreleased
+==========
+
+Changed
+-------
+
+- Replace the `httpx` dependency with `httpx2`.
 
 v0.0.13 (2026-01-21)
 ====================
