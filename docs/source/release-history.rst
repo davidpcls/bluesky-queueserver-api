@@ -5,6 +5,11 @@ Release History
 Unreleased
 ==========
 
+Removed
+-------
+
+- Support for Python 3.10. The minimum supported Python version is now 3.11.
+
 Changed
 -------
 
